@@ -1,0 +1,176 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Profile & Email Generator</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto py-8 px-4">
+        <h1 class="text-3xl font-bold text-center mb-8">AI Profile & Email Generator</h1>
+        
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4">Generate Content</h2>
+            
+            <div class="mb-4">
+                <label class="block text-gray-700 mb-2">Task Type</label>
+                <select id="taskType" class="w-full p-2 border rounded">
+                    <option value="profile_summary">Profile Summary</option>
+                    <option value="custom_email">Custom Email</option>
+                </select>
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-gray-700 mb-2">Search Query</label>
+                <input type="text" id="searchQuery" class="w-full p-2 border rounded" 
+                       placeholder="Enter person name or company to research">
+            </div>
+            
+            <div id="profileContext" class="mb-4">
+                <label class="block text-gray-700 mb-2">Additional Person Info (optional)</label>
+                <textarea id="personInfo" class="w-full p-2 border rounded h-24" 
+                          placeholder="Add any additional information about the person"></textarea>
+            </div>
+            
+            <div id="emailContext" class="mb-4 hidden">
+                <label class="block text-gray-700 mb-2">Email Purpose (optional)</label>
+                <textarea id="emailPurpose" class="w-full p-2 border rounded h-24" 
+                          placeholder="Describe the purpose of this email"></textarea>
+            </div>
+            
+            <button id="generateBtn" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                Generate
+            </button>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="md:col-span-2">
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h2 class="text-xl font-semibold mb-4">Generated Content</h2>
+                    <div id="loadingIndicator" class="hidden text-center py-4">
+                        <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-300 border-t-blue-600"></div>
+                        <p class="mt-2 text-gray-600">Generating content...</p>
+                    </div>
+                    <div id="resultContainer" class="prose max-w-none">
+                        <p class="text-gray-500 italic">Generated content will appear here</p>
+                    </div>
+                    <button id="copyBtn" class="mt-4 bg-gray-200 text-gray-800 px-4 py-2 rounded hover:bg-gray-300 hidden">
+                        Copy to Clipboard
+                    </button>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold mb-4">Search Results</h2>
+                <div id="searchResultsContainer">
+                    <p class="text-gray-500 italic">Search results will appear here</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Handle task type change
+        document.getElementById('taskType').addEventListener('change', function() {
+            const profileContext = document.getElementById('profileContext');
+            const emailContext = document.getElementById('emailContext');
+            
+            if (this.value === 'profile_summary') {
+                profileContext.classList.remove('hidden');
+                emailContext.classList.add('hidden');
+            } else {
+                profileContext.classList.add('hidden');
+                emailContext.classList.remove('hidden');
+            }
+        });
+        
+        // Handle generate button click
+        document.getElementById('generateBtn').addEventListener('click', async function() {
+            const taskType = document.getElementById('taskType').value;
+            const searchQuery = document.getElementById('searchQuery').value;
+            
+            if (!searchQuery) {
+                alert('Please enter a search query');
+                return;
+            }
+            
+            // Show loading indicator
+            document.getElementById('loadingIndicator').classList.remove('hidden');
+            document.getElementById('resultContainer').innerHTML = '';
+            document.getElementById('searchResultsContainer').innerHTML = '';
+            document.getElementById('copyBtn').classList.add('hidden');
+            
+            // Prepare context based on task type
+            let context = {};
+            if (taskType === 'profile_summary') {
+                context.person_info = document.getElementById('personInfo').value;
+            } else {
+                context.email_purpose = document.getElementById('emailPurpose').value;
+            }
+            
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: searchQuery,
+                        task_type: taskType,
+                        context: context
+                    }),
+                });
+                
+                const data = await response.json();
+                
+                // Display result
+                document.getElementById('resultContainer').innerHTML = 
+                    `<div class="whitespace-pre-wrap">${data.response}</div>`;
+                
+                // Display search results
+                let searchResultsHTML = '';
+                if (data.search_results && data.search_results.length > 0) {
+                    searchResultsHTML = data.search_results.map(result => `
+                        <div class="mb-4 pb-4 border-b">
+                            <h3 class="text-lg font-medium text-blue-600">
+                                <a href="${result.link}" target="_blank" rel="noopener noreferrer">${result.title}</a>
+                            </h3>
+                            <p class="text-sm text-gray-600">${result.link}</p>
+                            <p class="mt-1">${result.snippet}</p>
+                        </div>
+                    `).join('');
+                } else {
+                    searchResultsHTML = '<p class="text-gray-500">No search results available</p>';
+                }
+                document.getElementById('searchResultsContainer').innerHTML = searchResultsHTML;
+                
+                // Show copy button
+                document.getElementById('copyBtn').classList.remove('hidden');
+                
+            } catch (error) {
+                document.getElementById('resultContainer').innerHTML = 
+                    `<p class="text-red-600">Error: ${error.message}</p>`;
+            } finally {
+                // Hide loading indicator
+                document.getElementById('loadingIndicator').classList.add('hidden');
+            }
+        });
+        
+        // Handle copy button click
+        document.getElementById('copyBtn').addEventListener('click', function() {
+            const content = document.getElementById('resultContainer').innerText;
+            navigator.clipboard.writeText(content).then(() => {
+                const originalText = this.innerText;
+                this.innerText = 'Copied!';
+                setTimeout(() => {
+                    this.innerText = originalText;
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy text: ', err);
+            });
+        });
+    </script>
+</body>
+</html>
